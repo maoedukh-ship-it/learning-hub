@@ -1,0 +1,1579 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  AssessmentRecord,
+  CertificateRecord,
+  CourseRecord,
+  EnrollmentRecord,
+  TNARecord,
+  UserProfile,
+  calculateCompetencyGap,
+  calculateCourseProgress,
+  evaluateCertificateEligibility,
+  gradeAssessmentOnServer,
+  SubmissionAnswerMap,
+} from './lms-logic';
+import { BRAND, UserRole } from './brand';
+
+export interface CategoryRecord {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  courseCount: number;
+}
+
+export interface LearningPathRecord {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  targetRole: string;
+  estimatedHours: number;
+  courseIds: string[];
+}
+
+export interface OrganizationRecord {
+  id: string;
+  name: string;
+  slug: string;
+  industry: string;
+  employeeCount: number;
+}
+
+export interface DepartmentRecord {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  name: string;
+  code: string;
+  managerName: string;
+  headcount: number;
+  completionRate: number;
+}
+
+export interface TeamRecord {
+  id: string;
+  departmentId: string;
+  departmentName: string;
+  name: string;
+  leadName: string;
+  memberCount: number;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  actorId: string;
+  actorEmail: string;
+  actorRole: UserRole;
+  action: string;
+  targetType: string;
+  targetId: string;
+  summary: string;
+  createdAt: string;
+}
+
+export interface NotificationRecord {
+  id: string;
+  userId: string;
+  eventType:
+    | 'invitation'
+    | 'assignment'
+    | 'due_soon'
+    | 'overdue'
+    | 'completion'
+    | 'assessment'
+    | 'certificate'
+    | 'announcement';
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AssessmentAttemptRecord {
+  id: string;
+  assessmentId: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  scorePercent: number;
+  earnedPoints: number;
+  totalPoints: number;
+  passed: boolean;
+  attemptNumber: number;
+  submittedAt: string;
+}
+
+export interface LearningHubDatabase {
+  currentSessionUserId: string;
+  users: UserProfile[];
+  categories: CategoryRecord[];
+  courses: CourseRecord[];
+  learningPaths: LearningPathRecord[];
+  assessments: AssessmentRecord[];
+  assessmentAttempts: AssessmentAttemptRecord[];
+  enrollments: EnrollmentRecord[];
+  certificates: CertificateRecord[];
+  organizations: OrganizationRecord[];
+  departments: DepartmentRecord[];
+  teams: TeamRecord[];
+  tnaRecords: TNARecord[];
+  notifications: NotificationRecord[];
+  auditLogs: AuditLogRecord[];
+  bookmarks: { userId: string; courseId: string; lessonId?: string; createdAt: string }[];
+  platformSettings: {
+    publicRegistrationEnabled: false;
+    requireStrongPasswords: boolean;
+    sessionTimeoutMinutes: number;
+    certificateVerificationPublic: boolean;
+    muxVideoConfigured: boolean;
+    emailProviderConfigured: boolean;
+    googleSheetsSyncReady: boolean;
+    lastExportedSheetUrl?: string;
+  };
+}
+
+const DATA_DIR = path.join(process.cwd(), '.data');
+const DB_FILE = path.join(DATA_DIR, 'learning-hub-store.json');
+
+function createInitialSeedDatabase(): LearningHubDatabase {
+  const users: UserProfile[] = [
+    {
+      id: 'user-admin-1',
+      fullName: BRAND.initialAdmin.fullName,
+      email: BRAND.initialAdmin.email,
+      role: 'super_admin',
+      status: 'active',
+      employeeId: 'ADM-0001',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-ld',
+      teamId: 'team-ld-core',
+      jobTitle: 'System Administrator & Director of L&D',
+      mustChangePassword: false,
+      createdAt: '2026-01-10T08:00:00Z',
+      lastLoginAt: '2026-10-22T09:15:00Z',
+    },
+    {
+      id: 'user-inst-1',
+      fullName: 'Dr. Sophea Vann',
+      email: 'sophea.vann@wing-shop.com',
+      role: 'instructor',
+      status: 'active',
+      employeeId: 'INS-0012',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-sec',
+      teamId: 'team-soc',
+      jobTitle: 'Principal Cybersecurity & Cloud Architect',
+      mustChangePassword: false,
+      createdAt: '2026-02-01T08:30:00Z',
+      lastLoginAt: '2026-10-21T14:20:00Z',
+    },
+    {
+      id: 'user-inst-2',
+      fullName: 'Marcus Vance',
+      email: 'marcus.vance@wing-shop.com',
+      role: 'instructor',
+      status: 'active',
+      employeeId: 'INS-0019',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-ld',
+      teamId: 'team-ld-core',
+      jobTitle: 'Director of Enterprise Compliance & Risk',
+      mustChangePassword: false,
+      createdAt: '2026-02-14T10:00:00Z',
+      lastLoginAt: '2026-10-20T16:40:00Z',
+    },
+    {
+      id: 'user-mgr-1',
+      fullName: 'Nary Pich',
+      email: 'nary.pich@wing-shop.com',
+      role: 'manager',
+      status: 'active',
+      employeeId: 'MGR-0045',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-eng',
+      teamId: 'team-platform',
+      jobTitle: 'VP of Engineering & Training Manager',
+      mustChangePassword: false,
+      createdAt: '2026-03-01T09:00:00Z',
+      lastLoginAt: '2026-10-22T07:50:00Z',
+    },
+    {
+      id: 'user-learn-1',
+      fullName: 'Dara Kem',
+      email: 'dara.kem@wing-shop.com',
+      role: 'learner',
+      status: 'active',
+      employeeId: 'EMP-2026-104',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-eng',
+      teamId: 'team-platform',
+      jobTitle: 'Senior Backend Engineer',
+      mustChangePassword: false,
+      createdAt: '2026-04-12T08:00:00Z',
+      lastLoginAt: '2026-10-22T10:05:00Z',
+    },
+    {
+      id: 'user-learn-2',
+      fullName: 'Channary Meas',
+      email: 'channary.meas@wing-shop.com',
+      role: 'learner',
+      status: 'active',
+      employeeId: 'EMP-2026-118',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-ops',
+      teamId: 'team-support',
+      jobTitle: 'Financial Operations Specialist',
+      mustChangePassword: false,
+      createdAt: '2026-05-19T08:00:00Z',
+      lastLoginAt: '2026-10-19T11:30:00Z',
+    },
+    {
+      id: 'user-learn-3',
+      fullName: 'Vicheka Rith',
+      email: 'vicheka.rith@wing-shop.com',
+      role: 'learner',
+      status: 'active',
+      employeeId: 'EMP-2026-142',
+      organizationId: 'org-wing-1',
+      departmentId: 'dept-eng',
+      teamId: 'team-platform',
+      jobTitle: 'Cloud Infrastructure Engineer',
+      mustChangePassword: true,
+      createdAt: '2026-09-01T08:00:00Z',
+      lastLoginAt: '2026-10-18T15:10:00Z',
+    },
+  ];
+
+  const categories: CategoryRecord[] = [
+    {
+      id: 'cat-sec',
+      name: 'Cybersecurity & Infrastructure',
+      slug: 'cybersecurity-infrastructure',
+      description:
+        'Zero-trust network security, cloud hardening, identity protection, and incident response protocols.',
+      courseCount: 2,
+    },
+    {
+      id: 'cat-comp',
+      name: 'Corporate Compliance & Risk',
+      slug: 'corporate-compliance-risk',
+      description:
+        'Mandatory AML/KYC standards, data privacy governance, ISO 27001 controls, and workplace ethics.',
+      courseCount: 1,
+    },
+    {
+      id: 'cat-data',
+      name: 'Data Engineering & Analytics',
+      slug: 'data-engineering-analytics',
+      description:
+        'Relational PostgreSQL architecture, high-availability replication, indexing, and telemetry pipelines.',
+      courseCount: 1,
+    },
+    {
+      id: 'cat-lead',
+      name: 'Leadership & Management',
+      slug: 'leadership-management',
+      description:
+        'Engineering management, competency assessment, Training Needs Analysis (TNA), and team execution.',
+      courseCount: 1,
+    },
+  ];
+
+  const courses: CourseRecord[] = [
+    {
+      id: 'course-cyber-101',
+      slug: 'enterprise-cybersecurity-foundations',
+      title: 'Enterprise Cybersecurity Foundations & Zero-Trust Architecture',
+      shortDescription:
+        'Master identity-first security, cryptographic transport, secrets hygiene, and incident containment across corporate infrastructure.',
+      fullDescription:
+        'Designed for engineering, operations, and corporate staff, this flagship program establishes rigorous cybersecurity practices across cloud and on-premise environments. Learners implement least-privilege access control, audit identity boundaries, defend against credential phishing, and execute structured incident response playbooks.',
+      categoryId: 'cat-sec',
+      categoryName: 'Cybersecurity & Infrastructure',
+      instructorId: 'user-inst-1',
+      instructorName: 'Dr. Sophea Vann',
+      instructorTitle: 'Principal Cybersecurity & Cloud Architect',
+      level: 'Intermediate',
+      durationHours: 6.5,
+      language: 'English',
+      status: 'published',
+      publishedAt: '2026-06-15',
+      passingScore: 80,
+      certificateEligible: true,
+      isMandatoryDefault: true,
+      thumbnailTheme: 'navy',
+      assessmentId: 'assess-cyber-101',
+      objectives: [
+        'Enforce Zero-Trust authentication and hardware-backed MFA across enterprise portals',
+        'Eliminate hardcoded secrets and configure server-side credential isolation',
+        'Design PostgreSQL Row-Level Security (RLS) policies to prevent horizontal privilege escalation',
+        'Execute rapid containment and forensic logging during security incidents',
+      ],
+      prerequisites: [
+        'Basic familiarity with web applications and corporate identity accounts',
+      ],
+      sections: [
+        {
+          id: 'sec-cyber-1',
+          courseId: 'course-cyber-101',
+          title: 'Module 1: Zero-Trust Identity & Access Governance',
+          orderIndex: 1,
+          lessons: [
+            {
+              id: 'les-cyber-1',
+              sectionId: 'sec-cyber-1',
+              courseId: 'course-cyber-101',
+              title: '1.1 Principles of Least Privilege & Identity Boundaries',
+              type: 'video',
+              durationMinutes: 18,
+              orderIndex: 1,
+              videoUrl: 'https://stream.mux.com/enterprise-zero-trust-101.m3u8',
+              content:
+                'In a Zero-Trust architecture, network locality never implies trust. Every request—whether originating from headquarters or a remote endpoint—must be authenticated, authorized against explicit role policies, and continuously validated.\n\nKey Takeaways:\n1. Separate authentication identity from authorization roles in dedicated server-validated tables.\n2. Block public self-registration on internal enterprise portals; provision accounts exclusively through verified administrative workflows.\n3. Enforce short-lived session tokens with strict HTTP-only cookie attributes.',
+              resources: [
+                {
+                  id: 'res-cyber-1',
+                  title: 'Zero-Trust Reference Architecture Checklist (PDF)',
+                  fileType: 'PDF',
+                  sizeLabel: '1.4 MB',
+                  url: '/api/resources/res-cyber-1',
+                },
+                {
+                  id: 'res-cyber-2',
+                  title: 'RBAC Policy Matrix Template (XLSX)',
+                  fileType: 'XLSX',
+                  sizeLabel: '420 KB',
+                  url: '/api/resources/res-cyber-2',
+                },
+              ],
+            },
+            {
+              id: 'les-cyber-2',
+              sectionId: 'sec-cyber-1',
+              courseId: 'course-cyber-101',
+              title: '1.2 Server-Side Secret Isolation & API Gateways',
+              type: 'reading',
+              durationMinutes: 22,
+              orderIndex: 2,
+              content:
+                'Privileged credentials—such as database service-role keys, signing secrets, and third-party API tokens—must remain strictly on the server.\n\nArchitectural Rules:\n• Never prefix privileged keys with NEXT_PUBLIC_ or bundle them into client JavaScript.\n• Validate every mutation payload with strict schema validation (Zod) before touching persistence layers.\n• Record administrative state changes in an append-only audit log with actor ID, timestamp, and target entity.',
+              resources: [
+                {
+                  id: 'res-cyber-3',
+                  title: 'Server-Side Secret Hygiene Standard v2.4',
+                  fileType: 'PDF',
+                  sizeLabel: '890 KB',
+                  url: '/api/resources/res-cyber-3',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'sec-cyber-2',
+          courseId: 'course-cyber-101',
+          title: 'Module 2: Database Security & Final Certification Exam',
+          orderIndex: 2,
+          lessons: [
+            {
+              id: 'les-cyber-3',
+              sectionId: 'sec-cyber-2',
+              courseId: 'course-cyber-101',
+              title: '2.1 Row-Level Security (RLS) & Tenant Isolation',
+              type: 'document',
+              durationMinutes: 25,
+              orderIndex: 1,
+              content:
+                'Frontend route guards improve user experience, but true security lives at the API and database layer. PostgreSQL Row-Level Security (RLS) guarantees that even if a query is constructed broadly, rows outside the authenticated user’s scope remain invisible.\n\nPolicy Verification Pattern:\n• Anonymous role: 0 access to learner profiles, enrollments, or certificates.\n• Learner role: SELECT/UPDATE restricted to user_id = auth.uid().\n• Manager role: SELECT restricted to organization_id matching the manager’s assigned scope.\n• Super Admin: Verified via security-definer role lookup.',
+              resources: [
+                {
+                  id: 'res-cyber-4',
+                  title: 'PostgreSQL RLS Production Migration SQL',
+                  fileType: 'SQL',
+                  sizeLabel: '18 KB',
+                  url: '/api/resources/res-cyber-4',
+                },
+              ],
+            },
+            {
+              id: 'les-cyber-4',
+              sectionId: 'sec-cyber-2',
+              courseId: 'course-cyber-101',
+              title: '2.2 Final Certification Assessment',
+              type: 'quiz',
+              durationMinutes: 30,
+              orderIndex: 2,
+              assessmentId: 'assess-cyber-101',
+              content:
+                'Complete the graded certification examination with a score of 80% or higher to earn your official Learning Hub Enterprise Cybersecurity Certificate.',
+              resources: [],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'course-comp-201',
+      slug: 'aml-kyc-regulatory-compliance',
+      title: 'AML, KYC & Financial Regulatory Compliance 2026',
+      shortDescription:
+        'Mandatory regulatory training covering Anti-Money Laundering (AML), Know Your Customer (KYC) verification, and suspicious transaction escalation.',
+      fullDescription:
+        'This mandatory compliance program equips employees in financial operations, engineering, and customer-facing roles with actionable procedures to detect financial crime, perform enhanced due diligence (EDD), protect customer PII, and comply with international regulatory frameworks.',
+      categoryId: 'cat-comp',
+      categoryName: 'Corporate Compliance & Risk',
+      instructorId: 'user-inst-2',
+      instructorName: 'Marcus Vance',
+      instructorTitle: 'Director of Enterprise Compliance & Risk',
+      level: 'Beginner',
+      durationHours: 4.0,
+      language: 'English',
+      status: 'published',
+      publishedAt: '2026-07-01',
+      passingScore: 80,
+      certificateEligible: true,
+      isMandatoryDefault: true,
+      thumbnailTheme: 'cobalt',
+      assessmentId: 'assess-comp-201',
+      objectives: [
+        'Identify red-flag indicators of money laundering and structuring across payment channels',
+        'Perform Customer Due Diligence (CDD) and Enhanced Due Diligence (EDD) verification workflows',
+        'Escalate Suspicious Activity Reports (SARs) through confidential compliance channels without tipping off',
+      ],
+      prerequisites: ['Mandatory for all active corporate employees'],
+      sections: [
+        {
+          id: 'sec-comp-1',
+          courseId: 'course-comp-201',
+          title: 'Module 1: Regulatory Frameworks & KYC Verification',
+          orderIndex: 1,
+          lessons: [
+            {
+              id: 'les-comp-1',
+              sectionId: 'sec-comp-1',
+              courseId: 'course-comp-201',
+              title: '1.1 Three Stages of Money Laundering & Red Flags',
+              type: 'video',
+              durationMinutes: 20,
+              orderIndex: 1,
+              content:
+                'Understand Placement, Layering, and Integration across digital payment ecosystems. Learn how structuring, rapid cross-border velocity, and dormant account reactivation signal elevated risk.',
+              resources: [
+                {
+                  id: 'res-comp-1',
+                  title: '2026 AML Red-Flag Field Guide (PDF)',
+                  fileType: 'PDF',
+                  sizeLabel: '2.1 MB',
+                  url: '/api/resources/res-comp-1',
+                },
+              ],
+            },
+            {
+              id: 'les-comp-2',
+              sectionId: 'sec-comp-1',
+              courseId: 'course-comp-201',
+              title: '1.2 Customer Due Diligence (CDD) & SAR Escalation Protocol',
+              type: 'reading',
+              durationMinutes: 25,
+              orderIndex: 2,
+              content:
+                'When anomalous activity is detected, employees must document objective transaction evidence and submit an internal report to the Compliance Officer within 24 hours. Never disclose to the customer that an investigation or SAR is underway.',
+              resources: [],
+            },
+            {
+              id: 'les-comp-3',
+              sectionId: 'sec-comp-1',
+              courseId: 'course-comp-201',
+              title: '1.3 Mandatory AML/KYC Compliance Examination',
+              type: 'quiz',
+              durationMinutes: 25,
+              orderIndex: 3,
+              assessmentId: 'assess-comp-201',
+              content:
+                'Pass the regulatory compliance examination (minimum 80%) to satisfy annual corporate compliance requirements.',
+              resources: [],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'course-data-301',
+      slug: 'production-postgresql-data-architecture',
+      title: 'Production PostgreSQL & Distributed Data Architecture',
+      shortDescription:
+        'Normalized schema design, transactional integrity, composite indexing, connection pooling, and query optimization at scale.',
+      fullDescription:
+        'An advanced engineering course focused on operating mission-critical PostgreSQL databases. Covers ACID isolation levels, deadlock prevention, B-Tree and GIN indexing strategies, Drizzle/SQL migration governance, and zero-downtime schema evolution.',
+      categoryId: 'cat-data',
+      categoryName: 'Data Engineering & Analytics',
+      instructorId: 'user-inst-1',
+      instructorName: 'Dr. Sophea Vann',
+      instructorTitle: 'Principal Cybersecurity & Cloud Architect',
+      level: 'Advanced',
+      durationHours: 8.0,
+      language: 'English',
+      status: 'published',
+      publishedAt: '2026-08-10',
+      passingScore: 85,
+      certificateEligible: true,
+      thumbnailTheme: 'emerald',
+      assessmentId: 'assess-data-301',
+      objectives: [
+        'Design normalized 3NF relational schemas with strict foreign keys and uniqueness constraints',
+        'Optimize slow queries using EXPLAIN (ANALYZE, BUFFERS) and covering indexes',
+        'Configure resilient connection pools and safe transactional boundaries',
+      ],
+      prerequisites: [
+        'Working knowledge of SQL and backend application development',
+      ],
+      sections: [
+        {
+          id: 'sec-data-1',
+          courseId: 'course-data-301',
+          title: 'Module 1: Relational Modeling & Indexing Internals',
+          orderIndex: 1,
+          lessons: [
+            {
+              id: 'les-data-1',
+              sectionId: 'sec-data-1',
+              courseId: 'course-data-301',
+              title: '1.1 Normalized Schema Design & Referential Integrity',
+              type: 'video',
+              durationMinutes: 30,
+              orderIndex: 1,
+              content:
+                'Every production entity requires deterministic primary keys, explicit foreign key cascade rules, and check constraints that prevent invalid domain states from ever reaching disk.',
+              resources: [
+                {
+                  id: 'res-data-1',
+                  title: 'PostgreSQL Indexing & Query Plan Workbook',
+                  fileType: 'PDF',
+                  sizeLabel: '3.2 MB',
+                  url: '/api/resources/res-data-1',
+                },
+              ],
+            },
+            {
+              id: 'les-data-2',
+              sectionId: 'sec-data-1',
+              courseId: 'course-data-301',
+              title: '1.2 Connection Pooling & Multi-Step Transactions',
+              type: 'reading',
+              durationMinutes: 25,
+              orderIndex: 2,
+              content:
+                'Lazy on-demand connection pools prevent connection exhaustion in serverless compute environments. Multi-step mutations (such as recording an assessment attempt and issuing a certificate) must execute atomically.',
+              resources: [],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'course-lead-401',
+      slug: 'engineering-leadership-high-reliability',
+      title: 'Engineering Leadership & High-Reliability Teams',
+      shortDescription:
+        'Build high-trust engineering organizations through structured Competency Matrices, Training Needs Analysis (TNA), and operational excellence.',
+      fullDescription:
+        'Equip engineering managers and department heads with frameworks for evaluating team competencies, diagnosing skill gaps before they impact delivery, and structuring measurable development plans.',
+      categoryId: 'cat-lead',
+      categoryName: 'Leadership & Management',
+      instructorId: 'user-inst-2',
+      instructorName: 'Marcus Vance',
+      instructorTitle: 'Director of Enterprise Compliance & Risk',
+      level: 'Intermediate',
+      durationHours: 5.0,
+      language: 'English',
+      status: 'published',
+      publishedAt: '2026-09-05',
+      passingScore: 80,
+      certificateEligible: true,
+      thumbnailTheme: 'slate',
+      objectives: [
+        'Conduct objective Training Needs Analysis (TNA) across technical and operational roles',
+        'Distinguish course completion metrics from on-the-job competency progression',
+        'Run blameless post-mortems and structured quarterly skill reviews',
+      ],
+      prerequisites: ['Team Lead, Manager, or Senior IC role'],
+      sections: [
+        {
+          id: 'sec-lead-1',
+          courseId: 'course-lead-401',
+          title: 'Module 1: Competency Frameworks & TNA Execution',
+          orderIndex: 1,
+          lessons: [
+            {
+              id: 'les-lead-1',
+              sectionId: 'sec-lead-1',
+              courseId: 'course-lead-401',
+              title: '1.1 Designing a 5-Level Job Competency Scale',
+              type: 'reading',
+              durationMinutes: 20,
+              orderIndex: 1,
+              content:
+                'A transparent 1-to-5 competency scale separates foundational awareness (Level 1) from independent execution (Level 3) and organizational architectural leadership (Level 5).',
+              resources: [],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'course-sec-501',
+      slug: 'cloud-incident-response-forensics',
+      title: 'Cloud Incident Response & Forensics Playbook',
+      shortDescription:
+        'Triage, isolate, and investigate cloud security breaches using immutable telemetry and automated containment runbooks.',
+      fullDescription:
+        'Submitted by Dr. Sophea Vann for administrative review. Covers Kubernetes pod isolation, IAM key rotation under fire, memory forensics, and executive incident reporting.',
+      categoryId: 'cat-sec',
+      categoryName: 'Cybersecurity & Infrastructure',
+      instructorId: 'user-inst-1',
+      instructorName: 'Dr. Sophea Vann',
+      instructorTitle: 'Principal Cybersecurity & Cloud Architect',
+      level: 'Advanced',
+      durationHours: 7.0,
+      language: 'English',
+      status: 'pending_review',
+      passingScore: 85,
+      certificateEligible: true,
+      thumbnailTheme: 'amber',
+      objectives: [
+        'Contain compromised cloud workloads within 15 minutes of alert triage',
+        'Preserve chain-of-custody forensic snapshots for regulatory audit',
+      ],
+      prerequisites: ['Enterprise Cybersecurity Foundations'],
+      sections: [
+        {
+          id: 'sec-ir-1',
+          courseId: 'course-sec-501',
+          title: 'Module 1: First-Hour Triage & Containment',
+          orderIndex: 1,
+          lessons: [
+            {
+              id: 'les-ir-1',
+              sectionId: 'sec-ir-1',
+              courseId: 'course-sec-501',
+              title: '1.1 Automated IAM Revocation & Network Quarantine',
+              type: 'video',
+              durationMinutes: 24,
+              orderIndex: 1,
+              content:
+                'Walkthrough of isolating compromised cloud credentials without destroying volatile forensic state.',
+              resources: [],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const learningPaths: LearningPathRecord[] = [
+    {
+      id: 'lp-sec-comp',
+      slug: 'enterprise-security-compliance-path',
+      title: 'Enterprise Security & Regulatory Compliance Track',
+      description:
+        'Mandatory onboarding and annual certification curriculum for all engineering, operations, and corporate personnel.',
+      targetRole: 'All Enterprise Employees & Engineers',
+      estimatedHours: 10.5,
+      courseIds: ['course-cyber-101', 'course-comp-201'],
+    },
+    {
+      id: 'lp-arch-lead',
+      slug: 'technical-leadership-architecture-path',
+      title: 'Principal Systems Architecture & Engineering Leadership',
+      description:
+        'Advanced career track combining high-reliability PostgreSQL data engineering with structured engineering management and TNA mastery.',
+      targetRole: 'Senior Engineers, Tech Leads & Engineering Managers',
+      estimatedHours: 13.0,
+      courseIds: ['course-data-301', 'course-lead-401'],
+    },
+  ];
+
+  const assessments: AssessmentRecord[] = [
+    {
+      id: 'assess-cyber-101',
+      courseId: 'course-cyber-101',
+      courseTitle: 'Enterprise Cybersecurity Foundations & Zero-Trust Architecture',
+      title: 'Enterprise Cybersecurity & Zero-Trust Certification Exam',
+      description:
+        'Server-graded assessment verifying mastery of Zero-Trust access control, secret isolation, and PostgreSQL Row-Level Security.',
+      passingScore: 80,
+      maxAttempts: 3,
+      timeLimitMinutes: 30,
+      questions: [
+        {
+          id: 'q-cyber-1',
+          type: 'multiple_choice',
+          prompt:
+            'According to Learning Hub security architecture, how must learner accounts be provisioned?',
+          options: [
+            { id: 'opt-1', text: 'Through a public self-registration sign-up form' },
+            {
+              id: 'opt-2',
+              text: 'Exclusively by authorized Super Administrators via a server-validated provisioning workflow',
+            },
+            { id: 'opt-3', text: 'By passing a role parameter from the browser query string' },
+            { id: 'opt-4', text: 'Through anonymous guest session elevation' },
+          ],
+          correctOptionIds: ['opt-2'],
+          points: 25,
+          explanation:
+            'Public learner self-registration is strictly disabled; only authorized administrators can create accounts on the server.',
+        },
+        {
+          id: 'q-cyber-2',
+          type: 'multiple_select',
+          prompt:
+            'Select ALL mandatory security controls required for protecting privileged credentials and API routes:',
+          options: [
+            {
+              id: 'ms-1',
+              text: 'Keep service-role keys exclusively in server-side environment variables',
+            },
+            {
+              id: 'ms-2',
+              text: 'Enforce PostgreSQL Row-Level Security (RLS) alongside server-side role verification',
+            },
+            {
+              id: 'ms-3',
+              text: 'Prefix service-role keys with NEXT_PUBLIC_ for easier client debugging',
+            },
+            {
+              id: 'ms-4',
+              text: 'Record administrative user and role mutations in an immutable audit log',
+            },
+          ],
+          correctOptionIds: ['ms-1', 'ms-2', 'ms-4'],
+          points: 25,
+          explanation:
+            'Service-role keys must never be exposed via NEXT_PUBLIC_; server-side validation, RLS, and audit logging are mandatory.',
+        },
+        {
+          id: 'q-cyber-3',
+          type: 'true_false',
+          prompt:
+            'True or False: Hiding an administration link in the frontend navigation menu is sufficient to secure an administrative route.',
+          options: [
+            { id: 'tf-true', text: 'True' },
+            { id: 'tf-false', text: 'False' },
+          ],
+          correctOptionIds: ['tf-false'],
+          points: 25,
+          explanation:
+            'Security by obscurity is never sufficient; every route and API endpoint must enforce server-side RBAC and database RLS.',
+        },
+        {
+          id: 'q-cyber-4',
+          type: 'short_answer',
+          prompt:
+            'What PostgreSQL feature restricts which rows a user can read or modify based on their authenticated identity and role? (Enter the 3-letter acronym)',
+          acceptedAnswers: ['RLS', 'row level security', 'row-level security'],
+          points: 25,
+          explanation:
+            'Row-Level Security (RLS) enforces fine-grained row access policies directly inside PostgreSQL.',
+        },
+      ],
+    },
+    {
+      id: 'assess-comp-201',
+      courseId: 'course-comp-201',
+      courseTitle: 'AML, KYC & Financial Regulatory Compliance 2026',
+      title: 'Annual AML & KYC Regulatory Compliance Exam',
+      description:
+        'Verify your understanding of Anti-Money Laundering stages, KYC verification, and confidential SAR escalation.',
+      passingScore: 80,
+      maxAttempts: 3,
+      timeLimitMinutes: 25,
+      questions: [
+        {
+          id: 'q-comp-1',
+          type: 'multiple_choice',
+          prompt:
+            'When an employee identifies a suspicious transaction pattern, what is the required escalation action?',
+          options: [
+            {
+              id: 'c-opt-1',
+              text: 'Contact the customer immediately and ask if they are laundering funds',
+            },
+            {
+              id: 'c-opt-2',
+              text: 'Escalate an internal Suspicious Activity Report (SAR) to the Compliance Officer within 24 hours without tipping off the customer',
+            },
+            { id: 'c-opt-3', text: 'Post the transaction details in a public chat channel' },
+          ],
+          correctOptionIds: ['c-opt-2'],
+          points: 50,
+          explanation:
+            'Employees must escalate suspicious activity confidentially to Compliance within 24 hours and never tip off the subject.',
+        },
+        {
+          id: 'q-comp-2',
+          type: 'true_false',
+          prompt:
+            'True or False: Enhanced Due Diligence (EDD) is required for Politically Exposed Persons (PEPs) and high-risk jurisdictions.',
+          options: [
+            { id: 'c-tf-true', text: 'True' },
+            { id: 'c-tf-false', text: 'False' },
+          ],
+          correctOptionIds: ['c-tf-true'],
+          points: 50,
+          explanation:
+            'High-risk customers and PEPs require Enhanced Due Diligence (EDD) under AML/KYC regulations.',
+        },
+      ],
+    },
+    {
+      id: 'assess-data-301',
+      courseId: 'course-data-301',
+      courseTitle: 'Production PostgreSQL & Distributed Data Architecture',
+      title: 'PostgreSQL Architecture & Performance Assessment',
+      description:
+        'Technical examination on relational normalization, indexing, and connection pool management.',
+      passingScore: 85,
+      maxAttempts: 3,
+      timeLimitMinutes: 30,
+      questions: [
+        {
+          id: 'q-data-1',
+          type: 'multiple_choice',
+          prompt:
+            'Why should multi-step operations (such as grading an exam and issuing a certificate) run inside a database transaction?',
+          options: [
+            {
+              id: 'd-opt-1',
+              text: 'To guarantee atomicity so all related records succeed or roll back together',
+            },
+            { id: 'd-opt-2', text: 'To bypass foreign key constraints' },
+            { id: 'd-opt-3', text: 'To expose raw SQL errors to the browser' },
+          ],
+          correctOptionIds: ['d-opt-1'],
+          points: 100,
+          explanation:
+            'Database transactions guarantee ACID atomicity so partial state corruption cannot occur.',
+        },
+      ],
+    },
+  ];
+
+  const enrollments: EnrollmentRecord[] = [
+    {
+      id: 'enr-1',
+      userId: 'user-learn-1',
+      courseId: 'course-cyber-101',
+      enrolledAt: '2026-09-10T08:00:00Z',
+      status: 'completed',
+      completedLessonIds: ['les-cyber-1', 'les-cyber-2', 'les-cyber-3', 'les-cyber-4'],
+      lastAccessedLessonId: 'les-cyber-4',
+      lastPositionSeconds: 0,
+      progressPercent: 100,
+      assessmentPassed: true,
+      bestScore: 100,
+      completedAt: '2026-10-15T14:30:00Z',
+      certificateId: 'cert-1',
+      assignedBy: 'user-admin-1',
+      dueDate: '2026-10-30',
+      isMandatory: true,
+    },
+    {
+      id: 'enr-2',
+      userId: 'user-learn-1',
+      courseId: 'course-data-301',
+      enrolledAt: '2026-10-02T09:00:00Z',
+      status: 'in_progress',
+      completedLessonIds: ['les-data-1'],
+      lastAccessedLessonId: 'les-data-2',
+      lastPositionSeconds: 645,
+      progressPercent: 50,
+      assessmentPassed: false,
+      assignedBy: 'user-mgr-1',
+      dueDate: '2026-11-15',
+      isMandatory: false,
+    },
+    {
+      id: 'enr-3',
+      userId: 'user-learn-1',
+      courseId: 'course-comp-201',
+      enrolledAt: '2026-10-05T09:00:00Z',
+      status: 'in_progress',
+      completedLessonIds: ['les-comp-1'],
+      lastAccessedLessonId: 'les-comp-2',
+      lastPositionSeconds: 310,
+      progressPercent: 33,
+      assessmentPassed: false,
+      assignedBy: 'user-admin-1',
+      dueDate: '2026-11-01',
+      isMandatory: true,
+    },
+    {
+      id: 'enr-4',
+      userId: 'user-learn-2',
+      courseId: 'course-comp-201',
+      enrolledAt: '2026-08-01T09:00:00Z',
+      status: 'in_progress',
+      completedLessonIds: ['les-comp-1'],
+      lastAccessedLessonId: 'les-comp-2',
+      lastPositionSeconds: 120,
+      progressPercent: 33,
+      assessmentPassed: false,
+      assignedBy: 'user-admin-1',
+      dueDate: '2026-10-10', // Overdue!
+      isMandatory: true,
+    },
+    {
+      id: 'enr-5',
+      userId: 'user-learn-3',
+      courseId: 'course-cyber-101',
+      enrolledAt: '2026-09-15T09:00:00Z',
+      status: 'not_started',
+      completedLessonIds: [],
+      progressPercent: 0,
+      assessmentPassed: false,
+      assignedBy: 'user-mgr-1',
+      dueDate: '2026-10-12', // Overdue!
+      isMandatory: true,
+    },
+    {
+      id: 'enr-6',
+      userId: 'user-mgr-1',
+      courseId: 'course-lead-401',
+      enrolledAt: '2026-09-06T09:00:00Z',
+      status: 'completed',
+      completedLessonIds: ['les-lead-1'],
+      lastAccessedLessonId: 'les-lead-1',
+      progressPercent: 100,
+      assessmentPassed: true,
+      bestScore: 95,
+      completedAt: '2026-09-28T17:00:00Z',
+      certificateId: 'cert-2',
+      isMandatory: false,
+    },
+  ];
+
+  const certificates: CertificateRecord[] = [
+    {
+      id: 'cert-1',
+      certificateNumber: 'LH-2026-0001',
+      userId: 'user-learn-1',
+      learnerName: 'Dara Kem',
+      courseId: 'course-cyber-101',
+      courseTitle: 'Enterprise Cybersecurity Foundations & Zero-Trust Architecture',
+      issuedAt: '2026-10-15',
+      issuingAuthority: BRAND.issuingAuthority,
+      signatory: BRAND.authorizedSignatory,
+      status: 'valid',
+    },
+    {
+      id: 'cert-2',
+      certificateNumber: 'LH-2026-0002',
+      userId: 'user-mgr-1',
+      learnerName: 'Nary Pich',
+      courseId: 'course-lead-401',
+      courseTitle: 'Engineering Leadership & High-Reliability Teams',
+      issuedAt: '2026-09-28',
+      issuingAuthority: BRAND.issuingAuthority,
+      signatory: BRAND.authorizedSignatory,
+      status: 'valid',
+    },
+  ];
+
+  const assessmentAttempts: AssessmentAttemptRecord[] = [
+    {
+      id: 'att-1',
+      assessmentId: 'assess-cyber-101',
+      courseId: 'course-cyber-101',
+      userId: 'user-learn-1',
+      userName: 'Dara Kem',
+      scorePercent: 100,
+      earnedPoints: 100,
+      totalPoints: 100,
+      passed: true,
+      attemptNumber: 1,
+      submittedAt: '2026-10-15T14:28:00Z',
+    },
+  ];
+
+  const organizations: OrganizationRecord[] = [
+    {
+      id: 'org-wing-1',
+      name: 'Wing Enterprise Group',
+      slug: 'wing-enterprise-group',
+      industry: 'Digital Financial Services & Enterprise Technology',
+      employeeCount: 7,
+    },
+  ];
+
+  const departments: DepartmentRecord[] = [
+    {
+      id: 'dept-eng',
+      organizationId: 'org-wing-1',
+      organizationName: 'Wing Enterprise Group',
+      name: 'Digital Banking & FinTech Engineering',
+      code: 'ENG-FIN',
+      managerName: 'Nary Pich',
+      headcount: 3,
+      completionRate: 78,
+    },
+    {
+      id: 'dept-ops',
+      organizationId: 'org-wing-1',
+      organizationName: 'Wing Enterprise Group',
+      name: 'Customer & Financial Operations',
+      code: 'OPS-CORE',
+      managerName: 'Marcus Vance',
+      headcount: 1,
+      completionRate: 33,
+    },
+    {
+      id: 'dept-sec',
+      organizationId: 'org-wing-1',
+      organizationName: 'Wing Enterprise Group',
+      name: 'Information Security & Risk',
+      code: 'SEC-ZERO',
+      managerName: 'Dr. Sophea Vann',
+      headcount: 1,
+      completionRate: 100,
+    },
+    {
+      id: 'dept-ld',
+      organizationId: 'org-wing-1',
+      organizationName: 'Wing Enterprise Group',
+      name: 'Learning & Development (L&D)',
+      code: 'HR-LND',
+      managerName: 'System Admin',
+      headcount: 2,
+      completionRate: 100,
+    },
+  ];
+
+  const teams: TeamRecord[] = [
+    {
+      id: 'team-platform',
+      departmentId: 'dept-eng',
+      departmentName: 'Digital Banking & FinTech Engineering',
+      name: 'Core Platform Engineering',
+      leadName: 'Nary Pich',
+      memberCount: 3,
+    },
+    {
+      id: 'team-support',
+      departmentId: 'dept-ops',
+      departmentName: 'Customer & Financial Operations',
+      name: 'Enterprise Operations & KYC Desk',
+      leadName: 'Marcus Vance',
+      memberCount: 1,
+    },
+    {
+      id: 'team-soc',
+      departmentId: 'dept-sec',
+      departmentName: 'Information Security & Risk',
+      name: 'SOC & Threat Defense',
+      leadName: 'Dr. Sophea Vann',
+      memberCount: 1,
+    },
+    {
+      id: 'team-ld-core',
+      departmentId: 'dept-ld',
+      departmentName: 'Learning & Development (L&D)',
+      name: 'Instructional Design & Governance',
+      leadName: 'System Admin',
+      memberCount: 2,
+    },
+  ];
+
+  const tnaRecords: TNARecord[] = [
+    {
+      id: 'tna-1',
+      employeeId: 'user-learn-3',
+      employeeName: 'Vicheka Rith',
+      jobRole: 'Cloud Infrastructure Engineer',
+      organizationId: 'org-wing-1',
+      departmentName: 'Digital Banking & FinTech Engineering',
+      competencyName: 'Zero-Trust IAM & Cloud Incident Containment',
+      expectedLevel: 5,
+      currentLevel: 2,
+      gap: 3,
+      priority: 'Critical',
+      recommendedCourseId: 'course-cyber-101',
+      recommendedCourseTitle: 'Enterprise Cybersecurity Foundations & Zero-Trust Architecture',
+      responsibleManager: 'Nary Pich',
+      reviewDate: '2026-11-01',
+      status: 'assigned',
+    },
+    {
+      id: 'tna-2',
+      employeeId: 'user-learn-1',
+      employeeName: 'Dara Kem',
+      jobRole: 'Senior Backend Engineer',
+      organizationId: 'org-wing-1',
+      departmentName: 'Digital Banking & FinTech Engineering',
+      competencyName: 'PostgreSQL High-Availability & Query Optimization',
+      expectedLevel: 5,
+      currentLevel: 3,
+      gap: 2,
+      priority: 'High',
+      recommendedCourseId: 'course-data-301',
+      recommendedCourseTitle: 'Production PostgreSQL & Distributed Data Architecture',
+      responsibleManager: 'Nary Pich',
+      reviewDate: '2026-11-15',
+      status: 'in_progress',
+    },
+    {
+      id: 'tna-3',
+      employeeId: 'user-learn-2',
+      employeeName: 'Channary Meas',
+      jobRole: 'Financial Operations Specialist',
+      organizationId: 'org-wing-1',
+      departmentName: 'Customer & Financial Operations',
+      competencyName: 'AML/KYC Enhanced Due Diligence & SAR Escalation',
+      expectedLevel: 4,
+      currentLevel: 2,
+      gap: 2,
+      priority: 'High',
+      recommendedCourseId: 'course-comp-201',
+      recommendedCourseTitle: 'AML, KYC & Financial Regulatory Compliance 2026',
+      responsibleManager: 'Marcus Vance',
+      reviewDate: '2026-10-28',
+      status: 'assigned',
+    },
+  ];
+
+  const notifications: NotificationRecord[] = [
+    {
+      id: 'notif-1',
+      userId: 'user-learn-1',
+      eventType: 'certificate',
+      title: 'Certificate Issued: LH-2026-0001',
+      message:
+        'Congratulations! Your digital certificate for Enterprise Cybersecurity Foundations & Zero-Trust Architecture has been verified and issued.',
+      isRead: false,
+      createdAt: '2026-10-15T14:31:00Z',
+    },
+    {
+      id: 'notif-2',
+      userId: 'user-learn-1',
+      eventType: 'due_soon',
+      title: 'Mandatory Training Due November 1, 2026',
+      message:
+        'Please complete AML, KYC & Financial Regulatory Compliance 2026 before the mandatory compliance deadline.',
+      isRead: false,
+      createdAt: '2026-10-20T09:00:00Z',
+    },
+    {
+      id: 'notif-3',
+      userId: 'user-admin-1',
+      eventType: 'announcement',
+      title: 'Course Pending Administrative Review',
+      message:
+        'Dr. Sophea Vann submitted "Cloud Incident Response & Forensics Playbook" for Super Admin review and publication.',
+      isRead: false,
+      createdAt: '2026-10-21T11:15:00Z',
+    },
+  ];
+
+  const auditLogs: AuditLogRecord[] = [
+    {
+      id: 'aud-1',
+      actorId: 'user-admin-1',
+      actorEmail: 'learning@wing-shop.com',
+      actorRole: 'super_admin',
+      action: 'PROVISION_ADMIN_ACCOUNT',
+      targetType: 'user',
+      targetId: 'user-admin-1',
+      summary: 'Verified initial System Admin profile (learning@wing-shop.com) with Super Admin role.',
+      createdAt: '2026-01-10T08:00:00Z',
+    },
+    {
+      id: 'aud-2',
+      actorId: 'user-admin-1',
+      actorEmail: 'learning@wing-shop.com',
+      actorRole: 'super_admin',
+      action: 'CREATE_LEARNER_ACCOUNT',
+      targetType: 'user',
+      targetId: 'user-learn-1',
+      summary: 'Provisioned learner account for Dara Kem (dara.kem@wing-shop.com) in Digital Banking & FinTech Engineering.',
+      createdAt: '2026-04-12T08:00:00Z',
+    },
+    {
+      id: 'aud-3',
+      actorId: 'user-admin-1',
+      actorEmail: 'learning@wing-shop.com',
+      actorRole: 'super_admin',
+      action: 'PUBLISH_COURSE',
+      targetType: 'course',
+      targetId: 'course-cyber-101',
+      summary: 'Approved and published course "Enterprise Cybersecurity Foundations & Zero-Trust Architecture".',
+      createdAt: '2026-06-15T10:00:00Z',
+    },
+    {
+      id: 'aud-4',
+      actorId: 'user-admin-1',
+      actorEmail: 'learning@wing-shop.com',
+      actorRole: 'super_admin',
+      action: 'ISSUE_CERTIFICATE',
+      targetType: 'certificate',
+      targetId: 'LH-2026-0001',
+      summary: 'Issued certificate LH-2026-0001 to Dara Kem after server-verified 100% completion and exam pass.',
+      createdAt: '2026-10-15T14:30:00Z',
+    },
+  ];
+
+  return {
+    currentSessionUserId: 'user-admin-1',
+    users,
+    categories,
+    courses,
+    learningPaths,
+    assessments,
+    assessmentAttempts,
+    enrollments,
+    certificates,
+    organizations,
+    departments,
+    teams,
+    tnaRecords,
+    notifications,
+    auditLogs,
+    bookmarks: [
+      {
+        userId: 'user-learn-1',
+        courseId: 'course-data-301',
+        lessonId: 'les-data-2',
+        createdAt: '2026-10-18T10:00:00Z',
+      },
+    ],
+    platformSettings: {
+      publicRegistrationEnabled: false,
+      requireStrongPasswords: true,
+      sessionTimeoutMinutes: 60,
+      certificateVerificationPublic: true,
+      muxVideoConfigured: Boolean(process.env.MUX_TOKEN_ID && process.env.MUX_TOKEN_SECRET),
+      emailProviderConfigured: Boolean(process.env.RESEND_API_KEY),
+      googleSheetsSyncReady: true,
+    },
+  };
+}
+
+export function readDatabase(): LearningHubDatabase {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DB_FILE)) {
+      const seed = createInitialSeedDatabase();
+      fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), 'utf8');
+      return seed;
+    }
+    const raw = fs.readFileSync(DB_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as LearningHubDatabase;
+    // Ensure System Admin profile always preserves exact spec requirements
+    const sysAdmin = parsed.users.find(
+      (u) => u.email.toLowerCase() === BRAND.initialAdmin.email.toLowerCase()
+    );
+    if (sysAdmin) {
+      sysAdmin.fullName = BRAND.initialAdmin.fullName;
+      sysAdmin.role = 'super_admin';
+    }
+    return parsed;
+  } catch (err) {
+    console.error('Error reading Learning Hub database, falling back to seed:', err);
+    return createInitialSeedDatabase();
+  }
+}
+
+export function writeDatabase(db: LearningHubDatabase): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const tempFile = `${DB_FILE}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(db, null, 2), 'utf8');
+    fs.renameSync(tempFile, DB_FILE);
+  } catch (err) {
+    console.error('Error writing Learning Hub database:', err);
+  }
+}
+
+export function appendAuditLog(
+  db: LearningHubDatabase,
+  actor: Pick<UserProfile, 'id' | 'email' | 'role'>,
+  action: string,
+  targetType: string,
+  targetId: string,
+  summary: string
+): AuditLogRecord {
+  const entry: AuditLogRecord = {
+    id: `aud-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    actorId: actor.id,
+    actorEmail: actor.email,
+    actorRole: actor.role,
+    action,
+    targetType,
+    targetId,
+    summary,
+    createdAt: new Date().toISOString(),
+  };
+  db.auditLogs.unshift(entry);
+  return entry;
+}
+
+export function completeLessonAndRecalculate(
+  db: LearningHubDatabase,
+  userId: string,
+  courseId: string,
+  lessonId: string
+): { enrollment: EnrollmentRecord; certificate?: CertificateRecord } {
+  const course = db.courses.find((c) => c.id === courseId);
+  if (!course) {
+    throw new Error('Course not found.');
+  }
+
+  let enrollment = db.enrollments.find(
+    (e) => e.userId === userId && e.courseId === courseId
+  );
+  if (!enrollment) {
+    enrollment = {
+      id: `enr-${Date.now()}`,
+      userId,
+      courseId,
+      enrolledAt: new Date().toISOString(),
+      status: 'in_progress',
+      completedLessonIds: [],
+      progressPercent: 0,
+      assessmentPassed: false,
+    };
+    db.enrollments.push(enrollment);
+  }
+
+  if (!enrollment.completedLessonIds.includes(lessonId)) {
+    enrollment.completedLessonIds.push(lessonId);
+  }
+  enrollment.lastAccessedLessonId = lessonId;
+
+  const calc = calculateCourseProgress(course, enrollment.completedLessonIds);
+  enrollment.progressPercent = calc.progressPercent;
+
+  const eligibility = evaluateCertificateEligibility({
+    course,
+    completedLessonIds: enrollment.completedLessonIds,
+    assessmentPassed: enrollment.assessmentPassed || !course.assessmentId,
+    bestScore: enrollment.bestScore,
+  });
+
+  let issuedCert: CertificateRecord | undefined;
+  if (calc.allLessonsCompleted && (enrollment.assessmentPassed || !course.assessmentId)) {
+    enrollment.status = 'completed';
+    if (!enrollment.completedAt) {
+      enrollment.completedAt = new Date().toISOString();
+    }
+    if (eligibility.eligible) {
+      const existingCert = db.certificates.find(
+        (c) => c.userId === userId && c.courseId === courseId && c.status === 'valid'
+      );
+      if (!existingCert) {
+        const user = db.users.find((u) => u.id === userId);
+        const certNum = `LH-2026-${String(db.certificates.length + 1).padStart(4, '0')}`;
+        issuedCert = {
+          id: `cert-${Date.now()}`,
+          certificateNumber: certNum,
+          userId,
+          learnerName: user?.fullName || 'Authorized Learner',
+          courseId: course.id,
+          courseTitle: course.title,
+          issuedAt: new Date().toISOString().slice(0, 10),
+          issuingAuthority: BRAND.issuingAuthority,
+          signatory: BRAND.authorizedSignatory,
+          status: 'valid',
+        };
+        db.certificates.unshift(issuedCert);
+        enrollment.certificateId = issuedCert.id;
+        db.notifications.unshift({
+          id: `notif-${Date.now()}`,
+          userId,
+          eventType: 'certificate',
+          title: `Certificate Issued: ${certNum}`,
+          message: `Your official certificate for "${course.title}" is now ready for download and verification.`,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        issuedCert = existingCert;
+      }
+    }
+  } else if (enrollment.completedLessonIds.length > 0) {
+    enrollment.status = 'in_progress';
+  }
+
+  writeDatabase(db);
+  return { enrollment, certificate: issuedCert };
+}
+
+export function submitAssessmentAndRecord(
+  db: LearningHubDatabase,
+  userId: string,
+  assessmentId: string,
+  answers: SubmissionAnswerMap
+) {
+  const assessment = db.assessments.find((a) => a.id === assessmentId);
+  if (!assessment) {
+    throw new Error('Assessment not found.');
+  }
+  const user = db.users.find((u) => u.id === userId);
+  if (!user) {
+    throw new Error('Authenticated user not found.');
+  }
+
+  const prevAttempts = db.assessmentAttempts.filter(
+    (a) => a.assessmentId === assessmentId && a.userId === userId
+  ).length;
+
+  const graded = gradeAssessmentOnServer(assessment, answers, prevAttempts);
+  if (!graded.allowed) {
+    return { graded, certificate: undefined };
+  }
+
+  const attemptRecord: AssessmentAttemptRecord = {
+    id: `att-${Date.now()}`,
+    assessmentId,
+    courseId: assessment.courseId,
+    userId,
+    userName: user.fullName,
+    scorePercent: graded.scorePercent,
+    earnedPoints: graded.earnedPoints,
+    totalPoints: graded.totalPoints,
+    passed: graded.passed,
+    attemptNumber: graded.attemptNumber,
+    submittedAt: new Date().toISOString(),
+  };
+  db.assessmentAttempts.unshift(attemptRecord);
+
+  // Update course enrollment
+  const course = db.courses.find((c) => c.id === assessment.courseId);
+  let issuedCert: CertificateRecord | undefined;
+
+  if (course) {
+    let enrollment = db.enrollments.find(
+      (e) => e.userId === userId && e.courseId === course.id
+    );
+    if (!enrollment) {
+      enrollment = {
+        id: `enr-${Date.now()}`,
+        userId,
+        courseId: course.id,
+        enrolledAt: new Date().toISOString(),
+        status: 'in_progress',
+        completedLessonIds: [],
+        progressPercent: 0,
+        assessmentPassed: false,
+      };
+      db.enrollments.push(enrollment);
+    }
+
+    enrollment.bestScore = Math.max(enrollment.bestScore ?? 0, graded.scorePercent);
+    if (graded.passed) {
+      enrollment.assessmentPassed = true;
+      // Also mark any quiz lesson linked to this assessment as completed
+      for (const sec of course.sections) {
+        for (const les of sec.lessons) {
+          if (les.assessmentId === assessment.id && !enrollment.completedLessonIds.includes(les.id)) {
+            enrollment.completedLessonIds.push(les.id);
+          }
+        }
+      }
+    }
+
+    const calc = calculateCourseProgress(course, enrollment.completedLessonIds);
+    enrollment.progressPercent = calc.progressPercent;
+
+    const eligibility = evaluateCertificateEligibility({
+      course,
+      completedLessonIds: enrollment.completedLessonIds,
+      assessmentPassed: enrollment.assessmentPassed,
+      bestScore: enrollment.bestScore,
+    });
+
+    if (eligibility.eligible) {
+      enrollment.status = 'completed';
+      enrollment.completedAt = new Date().toISOString();
+      const existingCert = db.certificates.find(
+        (c) => c.userId === userId && c.courseId === course.id && c.status === 'valid'
+      );
+      if (!existingCert) {
+        const certNum = `LH-2026-${String(db.certificates.length + 1).padStart(4, '0')}`;
+        issuedCert = {
+          id: `cert-${Date.now()}`,
+          certificateNumber: certNum,
+          userId,
+          learnerName: user.fullName,
+          courseId: course.id,
+          courseTitle: course.title,
+          issuedAt: new Date().toISOString().slice(0, 10),
+          issuingAuthority: BRAND.issuingAuthority,
+          signatory: BRAND.authorizedSignatory,
+          status: 'valid',
+        };
+        db.certificates.unshift(issuedCert);
+        enrollment.certificateId = issuedCert.id;
+      } else {
+        issuedCert = existingCert;
+      }
+    }
+  }
+
+  writeDatabase(db);
+  return { graded, certificate: issuedCert };
+}
+
+export function createTNARecordInStore(
+  db: LearningHubDatabase,
+  actor: Pick<UserProfile, 'id' | 'email' | 'role'>,
+  payload: {
+    employeeId: string;
+    competencyName: string;
+    expectedLevel: number;
+    currentLevel: number;
+    recommendedCourseId: string;
+    reviewDate: string;
+  }
+): TNARecord {
+  const emp = db.users.find((u) => u.id === payload.employeeId);
+  const course = db.courses.find((c) => c.id === payload.recommendedCourseId);
+  const dept = db.departments.find((d) => d.id === emp?.departmentId);
+  const gapInfo = calculateCompetencyGap(payload.expectedLevel, payload.currentLevel);
+
+  const newRecord: TNARecord = {
+    id: `tna-${Date.now()}`,
+    employeeId: payload.employeeId,
+    employeeName: emp?.fullName || 'Employee',
+    jobRole: emp?.jobTitle || 'Specialist',
+    organizationId: emp?.organizationId || 'org-wing-1',
+    departmentName: dept?.name || 'Enterprise Operations',
+    competencyName: payload.competencyName.trim(),
+    expectedLevel: payload.expectedLevel,
+    currentLevel: payload.currentLevel,
+    gap: gapInfo.gap,
+    priority: gapInfo.priority,
+    recommendedCourseId: course?.id || 'course-cyber-101',
+    recommendedCourseTitle: course?.title || 'Enterprise Cybersecurity Foundations',
+    responsibleManager: actor.email === BRAND.initialAdmin.email ? 'System Admin' : 'Nary Pich',
+    reviewDate: payload.reviewDate || '2026-12-01',
+    status: 'assigned',
+  };
+
+  db.tnaRecords.unshift(newRecord);
+  appendAuditLog(
+    db,
+    actor,
+    'CREATE_TNA_RECORD',
+    'tna_record',
+    newRecord.id,
+    `Created Training Needs Analysis (TNA) record for ${newRecord.employeeName}: ${newRecord.competencyName} (Gap: ${newRecord.gap}, Priority: ${newRecord.priority}).`
+  );
+  writeDatabase(db);
+  return newRecord;
+}

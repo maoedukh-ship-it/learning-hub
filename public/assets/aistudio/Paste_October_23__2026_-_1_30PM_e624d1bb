@@ -1,0 +1,883 @@
+# MASTER DEVELOPMENT PROMPT — LEARNING HUB
+
+## 1. Your Role and Mission
+
+Act as a **Senior Full-Stack Software Architect, LMS Product Designer, UI/UX Specialist, Database Architect, Cybersecurity Engineer, and DevOps Engineer**.
+
+Your mission is to build a complete, modern, secure, responsive, production-ready online learning platform called **Learning Hub**, inspired by the learning experiences and course-management capabilities of Coursera, Udemy, and Alison.
+
+This platform must support both individual learning and corporate employee training. It must be suitable for professional Learning & Development (L&D), instructional design, employee onboarding, compliance training, assessments, certifications, and training analytics.
+
+Build a real, functional web application—not merely a visual prototype.
+
+**Core development principles:**
+- Inspect the existing project before changing anything.
+- Preserve existing working code, configuration, database migrations, and user-created content.
+- Implement features incrementally in manageable phases.
+- Use secure, maintainable, reusable architecture.
+- Never claim a feature is functional unless it has actually been implemented and tested.
+- Never use fake buttons, fabricated success messages, or hardcoded demonstration data as a substitute for real functionality.
+- If credentials, external integrations, or configuration are missing, clearly explain what is needed rather than pretending the integration works.
+
+## 2. Official Brand Identity
+
+**Platform name:** Learning Hub
+
+**Tagline:** Learn • Grow • Achieve
+
+**Brand personality:** Modern, professional, premium, trustworthy, accessible, and education-focused.
+
+### Brand color palette
+
+- Deep Navy Blue: `#0B1F3A`
+- White: `#FFFFFF`
+- Primary Blue Accent: `#2563EB`
+- Light Gray: `#F3F4F6`
+- Dark Text: `#111827`
+- Secondary Text: `#6B7280`
+- Success, warning, and error colors must be accessible and consistently applied.
+
+Use a clean enterprise-style design with professional typography, clear visual hierarchy, generous whitespace, consistent spacing, subtle borders, refined cards, and responsive layouts.
+
+Create a simple, professional Learning Hub brand mark, such as a graduation-cap-inspired icon, if no official logo asset exists. Do not invent a company logo or claim it is official.
+
+Centralize brand information in a reusable configuration file. Use it consistently across:
+- Website title and metadata.
+- Navigation and footer.
+- Homepage and course catalog.
+- Login and account recovery screens.
+- Learner, instructor, administrator, and organization dashboards.
+- Notifications and email templates.
+- Certificates and verification pages.
+- Error and empty states.
+- Favicon configuration and README documentation.
+
+## 3. Technology Stack
+
+Use the following preferred stack unless the existing project already has an appropriate, functioning equivalent:
+
+- **Frontend:** Next.js with App Router, React, TypeScript.
+- **Styling:** Tailwind CSS and shadcn/ui.
+- **Database:** Supabase PostgreSQL.
+- **Authentication:** Supabase Auth.
+- **File storage:** Supabase Storage.
+- **Hosting and deployment:** Vercel.
+- **Source control:** GitHub.
+- **Video delivery:** Mux or another suitable secure video platform, when configured.
+- **Validation:** Zod or an equivalent schema-validation library.
+- **Forms:** React Hook Form or an equivalent.
+- **Testing:** Appropriate unit, integration, authorization, and end-to-end tests.
+
+Use stable, compatible dependency versions. Follow the existing repository's conventions where reasonable.
+
+## 4. User Roles and Permissions
+
+Implement role-based access control with server-side authorization and database-level security.
+
+### A. Super Admin
+
+The initial administrator account must have the following profile:
+
+- **Full name:** System Admin
+- **Email / login identifier:** learning@wing-shop.com
+- **Role:** Super Admin
+- **Account provisioning:** Secure initial setup by an authorized administrator.
+
+The full name, login identifier, and authorization role must be stored as separate fields.
+
+Super Admin permissions include:
+- Access all authorized administrative functions.
+- Create, update, suspend, reactivate, and manage learner accounts.
+- Create and manage instructor accounts.
+- Assign appropriate roles through trusted administrative workflows.
+- Create, edit, approve, publish, archive, and manage courses.
+- Manage categories, lessons, assessments, certificates, and learning paths.
+- Assign mandatory courses and training programs.
+- Manage organizations, departments, and teams.
+- View authorized training reports, analytics, and audit logs.
+- Configure platform settings and integrations.
+- Manage certificate templates and verification.
+- Export authorized reports.
+- Review account and platform activity.
+
+Protect sensitive administrative actions with confirmation dialogs and audit logging where appropriate.
+
+### B. Instructor
+
+Instructors should be able to:
+- Access their instructor dashboard.
+- Create and edit their own courses.
+- Organize courses into sections and lessons.
+- Upload approved learning materials and media.
+- Create quizzes, exams, and assignments.
+- Preview courses before submission.
+- Submit courses for administrative approval.
+- View permitted learner progress and assessment results.
+- Review learner feedback and course analytics.
+- Manage only the courses and data for which they have authorization.
+
+Instructors must not automatically receive Super Admin permissions.
+
+### C. Learner
+
+Learners should be able to:
+- Sign in using an administrator-created account.
+- Access their personal learning dashboard.
+- Browse published courses.
+- Access courses for which they are enrolled or assigned.
+- Watch lessons and read learning materials.
+- Download authorized resources.
+- Resume learning from their last saved position.
+- Complete quizzes, exams, and assignments.
+- View their scores and feedback.
+- Track course completion and learning progress.
+- Download legitimately earned certificates.
+- View assigned training and due dates.
+- Manage their permitted profile information.
+- Receive relevant notifications.
+
+Learners must never access another learner's private records, administrative functions, unpublished courses, or unauthorized learning materials.
+
+### D. Organization / Training Manager
+
+Where organizational access is enabled, managers should be able to:
+- View authorized departments and teams.
+- Assign mandatory courses to employees.
+- Set due dates and completion requirements.
+- Monitor employee training completion.
+- Review relevant assessment results.
+- Generate authorized team and departmental reports.
+- Identify training gaps and overdue learning.
+- Track compliance and development progress.
+
+Managers must only access employees and organizational data within their assigned scope.
+
+## 5. Critical Authentication and Account Security Requirements
+
+**Public learner registration must remain disabled. Only authorized administrators may create learner accounts.**
+
+Implement the following requirements:
+
+1. Remove public learner registration forms and links from the user-facing application.
+2. Disable public self-registration using the supported authentication-provider configuration, not merely by hiding a button.
+3. Prevent unauthenticated visitors and learners from creating accounts through unprotected API routes or server actions.
+4. Provide a protected administrative user-creation workflow.
+5. Use Supabase's trusted server-side Admin API or another secure server-side provisioning mechanism to create accounts.
+6. Keep the Supabase service-role key and all privileged credentials exclusively on the server.
+7. Never expose privileged secrets in browser code, public environment variables, API responses, logs, screenshots, documentation, or GitHub.
+8. Never allow a client-supplied role to determine a newly created user's privileges.
+9. Assign new learners their permitted role on the trusted server and enforce role restrictions in the database.
+10. Prevent learners from changing their own roles, elevating permissions, or creating additional privileged accounts.
+11. Provide secure login, logout, password reset, session handling, and protected redirects.
+12. Use secure, short-lived or appropriately managed sessions and cookie settings supported by the chosen framework.
+13. Apply rate limiting or appropriate abuse protection to authentication and account-creation endpoints.
+14. Validate and sanitize all submitted data.
+15. Record significant administrative actions in an audit log.
+16. Avoid revealing whether an arbitrary email address has an account through password recovery or login error messages.
+17. Provide a safe first-login password-change process when supported by the authentication design.
+18. Do not automatically reset the administrator's password every time the application deploys.
+19. Do not create duplicate administrator accounts if the account already exists.
+20. Do not silently overwrite an existing account with a different user or role.
+
+### Initial administrator provisioning
+
+Provision the initial administrator securely through the Supabase Dashboard or a controlled, server-side, one-time setup script.
+
+Use the configured administrator email and the full name **System Admin**. Set the initial password through a secure secret input or environment variable that is not committed to source control.
+
+The supplied initial password is temporary and must not be copied into application code, SQL migrations, seed files, frontend configuration, README documentation, or Git history.
+
+If the administrator account already exists, safely verify and update its profile without creating a duplicate account. Assign Super Admin privileges only through a trusted provisioning process.
+
+If the environment does not provide the necessary credentials or permissions, document the exact manual setup steps rather than claiming provisioning succeeded.
+
+## 6. Professional Sitemap and Application Routes
+
+Create a clear and scalable route structure.
+
+### Public website
+
+- `/` — Homepage
+- `/courses` — Published course catalog
+- `/courses/[slug]` — Course details
+- `/categories` — Course categories
+- `/categories/[slug]` — Courses within a category
+- `/learning-paths` — Available learning paths
+- `/learning-paths/[slug]` — Learning path details
+- `/instructors` — Public instructor directory, if enabled
+- `/certificates/verify` — Certificate verification
+- `/about` — About Learning Hub
+- `/contact` — Contact page
+- `/faq` — Frequently asked questions
+- `/privacy` — Privacy policy
+- `/terms` — Terms of service
+
+### Authentication
+
+- `/login` — Login
+- `/forgot-password` — Password recovery
+- `/reset-password` — Secure password reset
+- `/auth/callback` — Authentication callback where required
+
+Do not provide public learner registration.
+
+### Learner portal
+
+- `/learn/dashboard`
+- `/learn/my-courses`
+- `/learn/assigned-training`
+- `/learn/learning-paths`
+- `/learn/courses/[courseId]`
+- `/learn/courses/[courseId]/lessons/[lessonId]`
+- `/learn/assessments`
+- `/learn/assessments/[assessmentId]`
+- `/learn/results`
+- `/learn/certificates`
+- `/learn/bookmarks`
+- `/learn/notifications`
+- `/learn/profile`
+- `/learn/settings`
+
+### Instructor portal
+
+- `/instructor/dashboard`
+- `/instructor/courses`
+- `/instructor/courses/new`
+- `/instructor/courses/[courseId]/edit`
+- `/instructor/courses/[courseId]/curriculum`
+- `/instructor/assessments`
+- `/instructor/learners`
+- `/instructor/analytics`
+- `/instructor/profile`
+
+### Administrator portal
+
+- `/admin/dashboard`
+- `/admin/users`
+- `/admin/users/new`
+- `/admin/users/[userId]`
+- `/admin/instructors`
+- `/admin/courses`
+- `/admin/courses/review`
+- `/admin/categories`
+- `/admin/learning-paths`
+- `/admin/assessments`
+- `/admin/certificates`
+- `/admin/organizations`
+- `/admin/departments`
+- `/admin/training-assignments`
+- `/admin/reports`
+- `/admin/reports/course-completion`
+- `/admin/reports/assessment-results`
+- `/admin/reports/employee-training`
+- `/admin/reports/training-gaps`
+- `/admin/audit-logs`
+- `/admin/notifications`
+- `/admin/settings`
+
+### Organization portal
+
+- `/organization/dashboard`
+- `/organization/employees`
+- `/organization/departments`
+- `/organization/teams`
+- `/organization/assignments`
+- `/organization/reports`
+- `/organization/training-gaps`
+
+Protect every route according to the user's role and organization membership. A route must not become secure simply because it is hidden from the navigation menu.
+
+## 7. Homepage and Course Discovery
+
+Create a polished, responsive homepage with:
+- Professional hero section.
+- Clear Learning Hub branding and tagline.
+- Searchable course catalog.
+- Course category navigation.
+- Featured courses.
+- Recently published courses.
+- Recommended learning paths.
+- Learning benefits.
+- Corporate training section.
+- Instructor or subject-matter expert highlights, when available.
+- Learner testimonials only when genuine data exists.
+- Clear login and course-discovery actions.
+- Professional footer with relevant links.
+
+Course discovery must support:
+- Search by title, description, category, and relevant keywords.
+- Filtering by category, level, language, and duration where data exists.
+- Sorting by relevance, newest, and other meaningful supported criteria.
+- Pagination or efficient loading.
+- Clear loading, empty, and error states.
+
+Only published and publicly discoverable courses should appear in the public catalog.
+
+## 8. Course Management System
+
+Administrators and authorized instructors must be able to manage courses with the following fields:
+
+- Course title.
+- Unique slug.
+- Short description.
+- Full description.
+- Thumbnail or cover image.
+- Category.
+- Instructor.
+- Learning objectives.
+- Prerequisites.
+- Difficulty level.
+- Estimated duration.
+- Language.
+- Course status.
+- Publication date.
+- Course sections.
+- Lessons and learning resources.
+- Assessment requirements.
+- Certificate eligibility rules.
+
+Support course statuses such as:
+- Draft.
+- Pending review.
+- Published.
+- Archived.
+
+Build a curriculum editor that allows authorized users to:
+- Add, edit, reorder, and remove sections.
+- Add, edit, reorder, and remove lessons.
+- Save changes.
+- Preview the learner experience.
+- Submit courses for review.
+- Publish courses only through authorized workflows.
+
+Validate all destructive actions and preserve valid existing content.
+
+## 9. Lesson and Media Learning Experience
+
+Support different lesson types:
+- Video lessons.
+- Text or reading lessons.
+- Downloadable learning resources.
+- Presentation or document lessons.
+- External learning resources where permitted.
+- Quiz or assessment lessons.
+
+The lesson player should include:
+- Video or lesson content area.
+- Course curriculum sidebar.
+- Previous and next lesson navigation.
+- Lesson completion controls.
+- Progress indicator.
+- Saved learning position where supported.
+- Resources and attachments.
+- Accessible keyboard navigation.
+- Responsive layouts for desktop, tablet, and mobile.
+- Clear error handling for unavailable content.
+
+Use an appropriate secure video-hosting provider when configured. Do not expose private video URLs, storage credentials, or signing secrets. Enforce authorized access to protected content.
+
+## 10. Learning Progress and Enrollment
+
+Implement real enrollment and progress tracking.
+
+Track:
+- Enrollment date.
+- Course status.
+- Completed lessons.
+- Last accessed lesson.
+- Last learning position where supported.
+- Completion percentage.
+- Assessment completion.
+- Final score where applicable.
+- Completion date.
+- Certificate eligibility.
+
+Calculate progress from validated completion records rather than trusting arbitrary percentages sent by the browser.
+
+Prevent duplicate enrollment records where the business rules do not allow them.
+
+Support administrator-assigned training and appropriate self-enrollment in published courses, according to course access rules.
+
+## 11. Assessments, Quizzes, and Examinations
+
+Create a functional assessment system supporting:
+- Multiple-choice questions.
+- Multiple-select questions.
+- True/false questions.
+- Short-answer questions.
+- Essay questions where manual grading is appropriate.
+- Configurable passing scores.
+- Attempt limits.
+- Time limits when required.
+- Randomized question selection where appropriate.
+- Feedback and result review.
+- Manual grading workflows for questions that cannot be automatically graded.
+
+Security requirements:
+- Store answer keys securely.
+- Do not send correct answers to the browser before they should be revealed.
+- Validate submissions on the server.
+- Calculate scores on the server.
+- Prevent unauthorized score modification.
+- Enforce attempt limits and timing rules server-side.
+- Record assessment attempts and grading results.
+- Keep assessment results private to authorized users.
+
+## 12. Certificates and Recognition
+
+Implement professional digital certificate generation.
+
+Certificates should include:
+- Learning Hub brand identity.
+- Learner's full name.
+- Course title.
+- Completion date.
+- Unique certificate number.
+- Issuing authority or organization where applicable.
+- Authorized signature or signatory label where configured.
+- Verification URL or QR code where supported.
+
+Issue certificates only after the required course completion and assessment conditions are verified on the server.
+
+Provide:
+- Certificate listing for learners.
+- Secure certificate download.
+- Public verification using a unique certificate identifier.
+- Administrative certificate management.
+- Revocation or invalidation where appropriate.
+- Audit records for issuance and revocation.
+
+Do not create certificates for incomplete courses or claim accreditation that has not been established.
+
+## 13. Administrator Dashboard
+
+Create a professional Super Admin dashboard using real database data.
+
+Include relevant metrics such as:
+- Total active learners.
+- Total instructors.
+- Total published courses.
+- Total enrollments.
+- Course completion rate.
+- Training in progress.
+- Overdue assigned training.
+- Assessment pass rates.
+- Certificates issued.
+- Recent administrative activities.
+
+Include charts, date filters, status breakdowns, and drill-down navigation where useful.
+
+Every metric must have a defined calculation and use authorized, actual data. Show helpful empty states when no data exists.
+
+The administrator profile menu should display **System Admin** and provide access to profile settings and secure logout.
+
+## 14. Administrative User Management
+
+Build a complete user-management interface.
+
+Authorized administrators should be able to:
+- Create learner accounts.
+- Create instructor accounts through approved workflows.
+- Search and filter users.
+- View user profiles and account status.
+- Edit permitted profile information.
+- Assign courses or mandatory training.
+- Suspend or reactivate accounts.
+- Initiate secure password-reset procedures.
+- Review relevant learning activity.
+- View audit history for administrative actions.
+
+When creating a learner, collect only necessary fields, such as:
+- Full name.
+- Email address.
+- Optional employee ID.
+- Optional department.
+- Optional organization.
+- Account status.
+
+Generate a secure invitation or temporary-password workflow according to the authentication provider's capabilities.
+
+Never display passwords in user lists or logs. Avoid emailing plaintext passwords. Require secure account activation or a password change when appropriate.
+
+Only Super Admins or specifically authorized administrators may access these functions.
+
+## 15. Corporate LMS and Training Needs Analysis
+
+Support corporate employee development.
+
+Implement:
+- Organizations.
+- Departments.
+- Teams.
+- Employee profiles.
+- Training assignments.
+- Required completion dates.
+- Mandatory and optional learning.
+- Completion tracking.
+- Overdue training monitoring.
+- Team-level learning analytics.
+- Employee competency and skills-gap records.
+- Training Needs Analysis (TNA) records.
+- Development recommendations.
+- Training plan reporting.
+
+Allow authorized managers to assess employees against defined job competencies, identify knowledge or skill gaps, and recommend relevant development activities.
+
+Where TNA functionality is implemented, support fields such as:
+- Employee and job role.
+- Competency or skill.
+- Expected competency level.
+- Current assessed level.
+- Identified gap.
+- Business impact or priority.
+- Recommended learning intervention.
+- Responsible manager.
+- Review date.
+- Status.
+
+Use a configurable and transparent competency scale. Keep TNA data accessible only to authorized personnel.
+
+Do not automatically equate course completion with improved job performance. Report completion, assessment outcomes, and performance measures separately.
+
+## 16. Reports and Analytics
+
+Build useful reports for authorized administrators and managers, including:
+- User activity.
+- Course enrollment.
+- Course completion.
+- Learners in progress.
+- Learners who have not started.
+- Overdue mandatory training.
+- Assessment results.
+- Pass and failure rates.
+- Certificates issued.
+- Department training status.
+- Training participation.
+- Competency gaps and development needs.
+- Training plan progress.
+
+Provide date filters and appropriate organization, department, course, and learner filters.
+
+Support CSV export and other export formats where implemented and justified.
+
+Validate access permissions before generating or downloading a report. Protect personally identifiable and employee performance information.
+
+## 17. Database Design and Migrations
+
+Design a normalized PostgreSQL schema with appropriate foreign keys, indexes, uniqueness constraints, timestamps, and deletion rules.
+
+Consider these tables or equivalent entities:
+- `profiles`
+- `user_roles` or an equivalent trusted role model
+- `organizations`
+- `organization_members`
+- `departments`
+- `teams`
+- `categories`
+- `courses`
+- `course_instructors`
+- `course_sections`
+- `lessons`
+- `lesson_resources`
+- `enrollments`
+- `lesson_progress`
+- `learning_paths`
+- `learning_path_courses`
+- `assessments`
+- `questions`
+- `answer_options`
+- `assessment_attempts`
+- `assessment_responses`
+- `certificates`
+- `reviews`
+- `notifications`
+- `training_assignments`
+- `competencies`
+- `employee_competencies`
+- `tna_records`
+- `audit_logs`
+
+Add billing, payments, orders, coupons, or subscriptions only if they are explicitly required and properly configured.
+
+Create version-controlled database migrations. Avoid destructive schema changes without a migration and recovery plan.
+
+Define appropriate relationships, indexes, uniqueness rules, and data-retention practices. Use database transactions for multi-step operations that must succeed or fail together.
+
+Do not store unnecessary sensitive information.
+
+## 18. Database Security and Row-Level Security
+
+Enable and configure Supabase Row-Level Security (RLS) for exposed tables.
+
+Implement policies based on trusted authentication identity, authorized roles, and organization membership.
+
+At a minimum:
+- Anonymous visitors cannot read private learner records.
+- Learners can access only their own private profile, progress, attempts, certificates, and notifications.
+- Learners cannot modify their roles or privileged account attributes.
+- Learners cannot create other user accounts.
+- Instructors can manage only authorized courses and related content.
+- Managers can access only authorized organizational data.
+- Administrative access is limited to explicitly authorized administrators.
+- Assessment answers and grading data remain protected.
+- Certificate issuance cannot be triggered by an unauthorized client.
+- Audit records cannot be altered by ordinary learners.
+- Storage policies protect private files and uploads.
+
+Use a trusted server-side process for privileged administrative operations.
+
+Do not rely exclusively on frontend route guards or hidden navigation links.
+
+Test RLS policies and authorization logic with representative anonymous, learner, instructor, manager, and Super Admin accounts.
+
+## 19. File Uploads and Storage
+
+Support authorized uploads for:
+- Course thumbnails.
+- Instructor materials.
+- Documents and presentations.
+- Lesson resources.
+- Certificates and approved assets.
+
+Requirements:
+- Validate file type, size, and content as appropriate.
+- Use private storage buckets for protected content.
+- Apply access policies.
+- Generate signed URLs for authorized access when appropriate.
+- Prevent unauthorized overwrites and deletions.
+- Avoid exposing sensitive storage paths or credentials.
+- Provide clear upload progress and error messages.
+- Store file metadata and ownership where appropriate.
+
+## 20. Notifications and Email
+
+Create a notification framework for relevant events, including:
+- New account invitation.
+- Account activation.
+- Password reset.
+- Course assignment.
+- Upcoming due date.
+- Overdue training.
+- Course completion.
+- Assessment results.
+- Certificate issuance.
+- Administrative announcements.
+
+Use an email provider only after its credentials and sender configuration are supplied.
+
+Keep email secrets server-side. If email delivery is not configured, implement a clearly documented integration point and do not claim that emails have been sent.
+
+## 21. User Interface and Accessibility
+
+Build a polished, cohesive enterprise learning experience.
+
+Requirements:
+- Responsive desktop, tablet, and mobile layouts.
+- Consistent navigation and page structure.
+- Accessible labels and form validation.
+- Keyboard navigation and visible focus states.
+- Appropriate contrast.
+- Loading skeletons where useful.
+- Empty states and helpful error messages.
+- Confirmation dialogs for destructive actions.
+- Toasts or feedback only after real operation results.
+- Reusable components and consistent design tokens.
+- Clear role-specific navigation.
+- Professional typography and spacing.
+- Accessible charts and tables.
+- Avoid unnecessary animations and clutter.
+
+Use the Learning Hub deep navy, white, and blue accent palette consistently.
+
+## 22. Performance, SEO, and Reliability
+
+Implement:
+- Appropriate server-side rendering and static rendering.
+- Pagination for large datasets.
+- Efficient database queries and indexes.
+- Image optimization.
+- Metadata for public pages.
+- Accessible semantic markup.
+- Sensible caching and revalidation.
+- Error boundaries and not-found pages.
+- Secure environment-variable management.
+- Useful server-side error logging without exposing secrets.
+- Protection against common web vulnerabilities.
+- Rate limiting for sensitive endpoints where appropriate.
+
+Do not cache private learner or organization-specific data in a way that exposes it to another user.
+
+## 23. GitHub and Vercel Deployment
+
+Configure the application for a reliable GitHub-to-Vercel deployment workflow.
+
+Requirements:
+1. Maintain the source code in the intended GitHub repository.
+2. Connect the repository to Vercel.
+3. Use preview deployments for branches and pull requests where available.
+4. Deploy production from the designated production branch.
+5. Configure environment variables separately for local development, preview, and production.
+6. Never commit `.env.local`, service-role keys, database passwords, API secrets, or other credentials.
+7. Document required environment variables using a safe `.env.example` containing placeholders only.
+8. Ensure database migrations can be applied in a controlled, repeatable manner.
+9. Run linting, type checking, tests, and production builds before deployment.
+10. Verify authentication redirects, database connectivity, and protected routes after deployment.
+11. Do not claim that a repository was pushed or an application deployed unless the operation actually succeeded.
+12. Do not overwrite production data during deployment or seed operations.
+
+Keep Learning Hub's existing deployment configuration intact unless a documented change is necessary.
+
+## 24. Environment Configuration
+
+Document the environment variables required by the application, such as:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` or the current supported public publishable key
+- `SUPABASE_SERVICE_ROLE_KEY` or the current supported server-side secret key
+- Video-provider credentials, if used.
+- Email-provider credentials, if used.
+- Application URL and callback configuration, if required.
+
+Use the exact names and formats expected by the installed libraries.
+
+Public environment variables must contain only values safe to expose to the browser. Keep all privileged keys server-side.
+
+Never include real passwords or secret values in committed example files.
+
+## 25. Testing and Quality Assurance
+
+Write and run tests for critical application behavior.
+
+### Authentication tests
+- Public learner registration is blocked.
+- Anonymous users cannot access protected portals.
+- Valid users can sign in and sign out.
+- Password recovery follows the configured secure workflow.
+- Invalid sessions and unauthorized requests are handled safely.
+
+### Authorization tests
+- Learners cannot access administrator routes.
+- Learners cannot create users.
+- Learners cannot assign themselves privileged roles.
+- Learners cannot access other learners' private data.
+- Instructors cannot edit unauthorized courses.
+- Managers cannot access unauthorized organizations.
+- Super Admins can access authorized administrative functions.
+
+### Learning workflow tests
+- Authorized users can create and publish courses.
+- Learners can access permitted courses.
+- Lesson progress is persisted correctly.
+- Course completion is calculated accurately.
+- Assessments are scored securely.
+- Certificates are issued only when eligibility requirements are met.
+- Reports reflect actual data.
+
+### Deployment checks
+- Lint passes.
+- Type checking passes.
+- Automated tests pass.
+- Production build succeeds.
+- Required environment variables are documented.
+- Database migrations are reviewed.
+- No secrets are exposed in the client bundle or repository.
+
+Report any failures clearly. Never state that tests passed if they were not run.
+
+## 26. Implementation Roadmap
+
+Build the platform in these phases, keeping the project runnable after each phase.
+
+**Phase 1 — Foundation and Branding**
+- Inspect the repository.
+- Establish the application structure.
+- Apply Learning Hub branding.
+- Create shared layouts, navigation, and design components.
+- Build the public homepage and basic course catalog.
+- Verify the local development and production build.
+
+**Phase 2 — Authentication and Security**
+- Configure Supabase Auth.
+- Provision the System Admin profile securely.
+- Implement role-based authorization.
+- Disable public learner registration.
+- Configure RLS and protected routes.
+- Build the administrator-created learner account workflow.
+- Test authentication and access restrictions.
+
+**Phase 3 — Courses and Enrollment**
+- Implement categories and course management.
+- Build the course catalog and course details.
+- Implement authorized enrollment.
+- Create the curriculum editor and lesson structure.
+
+**Phase 4 — Learner Experience**
+- Build the learner dashboard.
+- Implement the lesson player.
+- Persist lesson progress.
+- Support course resumption and learning resources.
+
+**Phase 5 — Assessments and Certificates**
+- Build quizzes, exams, and grading.
+- Implement secure results and attempt tracking.
+- Generate certificates and verification pages.
+
+**Phase 6 — Instructor and Administration**
+- Build instructor tools.
+- Build user management.
+- Build course moderation and publishing.
+- Implement administrative dashboards and audit logs.
+
+**Phase 7 — Corporate LMS and TNA**
+- Add organizations, departments, and teams.
+- Implement training assignments and due dates.
+- Build manager dashboards and employee training reports.
+- Add competency tracking and TNA workflows.
+
+**Phase 8 — Reporting, Integrations, and Launch**
+- Finalize reports and exports.
+- Configure email and video integrations where credentials are available.
+- Complete accessibility and security reviews.
+- Run all tests and production builds.
+- Configure GitHub and Vercel deployment.
+- Verify the production environment.
+
+Do not skip foundational security or claim unfinished phases are complete.
+
+## 27. Working Instructions for the Coding Assistant
+
+At the start of the task:
+
+1. Inspect the current repository, package scripts, application routes, components, authentication setup, database migrations, environment-variable usage, and deployment configuration.
+2. Identify what is already implemented and what is missing.
+3. Present a concise implementation plan and any blocking requirements.
+4. Start with Phase 1 or the next incomplete phase.
+5. Make real, targeted code changes in the existing project.
+6. Use reusable components and maintainable architecture.
+7. Add migrations and tests where needed.
+8. Run available checks after each meaningful implementation stage.
+9. Fix errors caused by your changes before proceeding.
+10. Summarize files changed, features completed, checks run, and remaining work.
+
+If an external service is not connected, provide exact setup instructions and continue with work that can be completed safely.
+
+Do not ask me to repeat information already included in this specification. Ask a question only when an essential decision cannot reasonably be made from the requirements.
+
+## 28. Definition of Done
+
+Learning Hub is ready for production only when:
+- The platform branding is consistent.
+- The administrator profile displays **System Admin**.
+- The configured administrator login is provisioned securely.
+- Public learner registration is disabled at the application and authentication levels.
+- Only authorized administrators can create learner accounts.
+- Role-based permissions and RLS policies are implemented and tested.
+- Core course, lesson, progress, assessment, and certificate workflows function correctly.
+- Administrative and learner dashboards use actual data.
+- Corporate training features work where implemented.
+- Sensitive information is protected.
+- Critical tests pass.
+- The production build succeeds.
+- GitHub and Vercel deployment are configured and verified.
+- Any unfinished integrations, manual setup, or known limitations are documented.
+
+**Final instruction:** Build Learning Hub as a secure, professional, maintainable learning platform—not just a demonstration. Prioritize correctness, access control, usability, and reliable deployment over superficial visual completeness.

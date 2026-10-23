@@ -1,0 +1,7 @@
+{
+  "name": "Learning Hub",
+  "description": "Enterprise Learning Management System (LMS) and Corporate Training Platform — Learn • Grow • Achieve.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
